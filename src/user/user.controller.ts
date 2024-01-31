@@ -29,7 +29,7 @@ export class UserController {
     @UseFilters(CustomFilter)
     @UsePipes(new ValidationPipe({ whitelist: false, transform: true }))
     login(@Req() req: any, @Res() res: any, @Body() body: LoginDto) {
-        console.log(body.email)
+
         this.userService.login(body).then((result: any) => {
             res.cookie("token", result.token, {
                 maxAge: 3600 * 1000,
@@ -50,7 +50,7 @@ export class UserController {
                     "reason_code": "Unauthorized_User"
                 }
             }
-            res.status(400).json(err);
+            res.status(400).json(fail_resp);
         });
     }
 

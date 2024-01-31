@@ -64,14 +64,10 @@ export class UserService {
     
         return new Promise(async (resolve, reject) => {
             const user = await this.getUser(body.email)
-            // let searchObj = {
-            //     email: body.email.toLowerCase(),
-            // }
-            // const user = await this.userModel.findOne(searchObj)
             if (user != null) {
                 const isMatch = await bcrypt.compare(body.password, user.password)
                 if (isMatch) {
-                    //create jwt tokens with required payload
+                    
                     let token = await this.jwtService.signAsync({ userId: body.email })
                     resolve( { user, token })
                 } else {

@@ -9,7 +9,7 @@ export class WebhookController {
 
     @Post('/:address')
     async handleWebhook(@Body() payload: any, @Param('address')  address: string) {
-        console.log('Received webhook event:', payload);
+    
         const result = await this.mainnetService.processWebhook(payload,address);
 
         return { success: true, result };
