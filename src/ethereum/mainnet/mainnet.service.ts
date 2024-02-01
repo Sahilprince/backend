@@ -10,16 +10,16 @@ import { EventsGateway } from '../websocket/events/events.gateway';
 const utils = ethers;
 const settings = {
     authToken: 'bKBTdt1lk-xloB1Uqed1EW73vBlGvah9',
-    network: Network.ETH_MAINNET, // Replace with your network.
+    network: Network.ETH_MAINNET,
 };
 const options = {
     method: 'POST',
     url: 'https://dashboard.alchemy.com/api/create-webhook',
     headers: { accept: 'application/json', 'content-type': 'application/json' },
-    data: { network: 'ETH_MAINNET', webhook_type: 'GRAPHQL' }
+    data: { network: 'ETH_MAINNET', webhook_type: 'GRAPHQL' },
 };
 
-const alchemy = new Alchemy(settings)
+const alchemy = new Alchemy(settings);
 @Injectable()
 export class MainnetService {
     constructor(
@@ -28,13 +28,8 @@ export class MainnetService {
         @InjectModel(wallet_events.name)
         private readonly webhookPayloadModel: Model<wallet_events>,
         private readonly eventsGateway: EventsGateway,
-
     ) { }
 
-
-    // private TOKEN_LISTS: any = {
-    //     Ethereum: 'https://raw.githubusercontent.com/viaprotocol/tokenlists/main/tokenlists/ethereum.json'
-    // }
     private provider(): ethers.providers.JsonRpcProvider {
         const provider = new ethers.providers.JsonRpcProvider(
             'https://eth-mainnet.g.alchemy.com/v2/YGt-xvQ_7wgLZNv7yyGmWSg-ZDyaiFKf',
@@ -53,17 +48,15 @@ export class MainnetService {
         const sortedHistory = history.sort((a, b) => b.blockNumber - a.blockNumber);
         const last10Transactions = sortedHistory.slice(0, 10);
 
-        const transactionsInEther = last10Transactions.map(transaction => ({
+        const transactionsInEther = last10Transactions.map((transaction) => ({
             hash: transaction.hash,
             blockNumber: transaction.blockNumber,
             to: transaction.to,
-            value: ethers.utils.formatEther(transaction.value._hex)
+            value: ethers.utils.formatEther(transaction.value._hex),
         }));
 
         return transactionsInEther;
     }
-
-
 
     async getLogs(walletAddress: string, years: number): Promise<any> {
         const provider = new ethers.providers.EtherscanProvider();
@@ -75,12 +68,12 @@ export class MainnetService {
             FromBlock,
             currentBlock,
         );
-        const limitedHistory = logs.slice(0, 1000)
-        const tnxHistory = limitedHistory.map(transaction => ({
+        const limitedHistory = logs.slice(0, 1000);
+        const tnxHistory = limitedHistory.map((transaction) => ({
             hash: transaction.hash,
             blockNumber: transaction.blockNumber,
             to: transaction.to,
-            value: ethers.utils.formatEther(transaction.value._hex)
+            value: ethers.utils.formatEther(transaction.value._hex),
         }));
 
         return tnxHistory;
@@ -101,21 +94,17 @@ export class MainnetService {
             );
             const ERC20_ABI = ABI.data;
 
-
             let walletBalance = await this.walletBalanceModel.findOne({
                 walletAddress: targetAddress,
             });
-            console.log(walletBalance)
+            console.log(walletBalance);
             if (walletBalance) {
-                return walletBalance
-            }
-            else {
+                return walletBalance;
+            } else {
                 walletBalance = new this.walletBalanceModel({
-                    targetAddress,
+                    walletAddress: targetAddress,
                     tokens: [],
                 });
-
-
 
                 for (const tkn of tokenLists) {
                     const erc20 = new ethers.Contract(tkn.address, ERC20_ABI, provider);
@@ -125,12 +114,10 @@ export class MainnetService {
                                 blockTag: +block,
                             })
                             .then(async (result) => {
-
                                 const balance = convertToNumber(result, tkn.decimals);
                                 if (balance === 0) {
                                     return null;
                                 }
-
 
                                 walletBalance.tokens.push({
                                     symbol: tkn.symbol,
@@ -141,7 +128,6 @@ export class MainnetService {
                                     logoURI: tkn.logoURI,
                                 });
 
-
                                 return {
                                     balance,
                                     name: tkn.name,
@@ -149,7 +135,6 @@ export class MainnetService {
                                 };
                             })
                             .catch((error) => {
-
                                 console.error(
                                     `Failed to fetch balance for ${tkn.name}: ${error}`,
                                 );
@@ -157,7 +142,6 @@ export class MainnetService {
                             }),
                     );
                 }
-
 
                 const promiseResults = await Promise.allSettled(proms);
                 console.log('Tokens to be saved:', walletBalance.tokens);
@@ -172,34 +156,33 @@ export class MainnetService {
             }
         } catch (error) {
             console.error('Error fetching token balances:', error);
-            throw error; // Rethrow the error to the caller
+            throw error;
         }
     }
     async setWalletAllert(targetAddress: string, email: string): Promise<any> {
         try {
-
-            // Check if there's an existing payload for the given email
-            let existingPayload = await this.webhookPayloadModel.findOne({ email: email });
+            let existingPayload = await this.webhookPayloadModel.findOne({
+                email: email,
+            });
 
             if (!existingPayload) {
+                existingPayload = new this.webhookPayloadModel({
+                    walletAddress: targetAddress,
+                    email: email,
+                });
 
-                // If no existing payload, create a new one
-                existingPayload = new this.webhookPayloadModel({ walletAddress: targetAddress, email: email });
-
-                // Create a webhook for address activity
                 const addressActivityWebhook = await alchemy.notify.createWebhook(
-                    process.env.SERVER_URL + targetAddress,
+                    process.env.SERVER_URL + 'webhook/'+ targetAddress,
                     WebhookType.ADDRESS_ACTIVITY,
                     {
                         addresses: [targetAddress],
                         network: Network.ETH_MAINNET,
-                    }
+                    },
                 );
-                console.log(addressActivityWebhook)
-                // Save the webhook details to the payload
+                console.log(addressActivityWebhook);
                 existingPayload.webhookId = addressActivityWebhook.id;
             }
-            // Save or update the payload in the database
+
             return existingPayload.save();
         } catch (error) {
             console.log('Error while setting wallet alert:', error);
@@ -209,36 +192,32 @@ export class MainnetService {
 
     async processWebhook(payload: any, targetAddress: string): Promise<void> {
         try {
-            // Retrieve existing alerts from the database
-            const walletAction = await this.webhookPayloadModel.findOne({ walletAddress: targetAddress });
+            const walletAction = await this.webhookPayloadModel.findOne({
+                walletAddress: targetAddress,
+            });
 
-            // Get the current alerts queue
             let alertsQueue = walletAction?.events || [];
 
-            // Set the maximum size of the queue
             const maxQueueSize = 50;
 
-            // Trim the queue if it exceeds the maximum size
             if (alertsQueue.length >= maxQueueSize) {
                 alertsQueue.splice(0, alertsQueue.length - maxQueueSize + 1);
             }
 
-            // Add the new alert to the queue
             alertsQueue.push(payload);
 
-            // Save the updated queue back to the database
-            const updatedWalletAction = await this.webhookPayloadModel.findOneAndUpdate(
-                { walletAddress: targetAddress },
-                { events: alertsQueue },
-                { upsert: true, new: true }
-            );
+            const updatedWalletAction =
+                await this.webhookPayloadModel.findOneAndUpdate(
+                    { walletAddress: targetAddress },
+                    { events: alertsQueue },
+                    { upsert: true, new: true },
+                );
 
             console.log('Updated wallet action:', updatedWalletAction);
 
-            // Send message to client using the latest data
-            this.eventsGateway.sendMessageToClient(`${payload.event.activity[0].value} of ${payload.event.activity[0].asset} has been transferred from ${payload.event.activity[0].fromAddress} to ${payload.event.activity[0].toAddress}`);
-
-            console.log(payload.event.activity[0].toAddress, "asdfghj");
+            this.eventsGateway.sendMessageToClient(
+                `${payload.event.activity[0].value} of ${payload.event.activity[0].asset} has been transferred from ${payload.event.activity[0].fromAddress} to ${payload.event.activity[0].toAddress}`,
+            );
         } catch (error) {
             console.error('Error processing webhook payload:', error);
             throw error;
@@ -247,37 +226,14 @@ export class MainnetService {
 
     async getWalletEventsDB(email: string): Promise<any> {
         try {
-            const response = await this.webhookPayloadModel.find().exec()
+            const response = await this.webhookPayloadModel.find().exec();
             return response;
         } catch (error) {
-            throw error
-
+            throw error;
         }
     }
 }
 
-
-
-// async removeWalletAllert(walletAddress: string): Promise<any> {
-//     try {
-//         const addressActivityWebhook = await alchemy.notify.createWebhook(
-//             "https://webhook.site/03f3293a-11d7-4828-b51d-f6dd427c4972",
-//             WebhookType.ADDRESS_ACTIVITY,
-//             {
-//                 addresses: [walletAddress],
-//                 network: Network.ETH_MAINNET,
-//             }
-//         );
-//         return addressActivityWebhook;
-//     } catch (error) {
-//         console.log('Error while setting wallet allert: ',error)
-//         throw error;
-//     }
-// }
-
-
 function convertToNumber(value: string, decimals: number): number {
     return parseFloat(value) / Math.pow(10, decimals);
 }
-
-
